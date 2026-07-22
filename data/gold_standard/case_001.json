@@ -1,0 +1,69 @@
+from abc import ABC, abstractmethod
+from typing import Dict, Any
+
+class EvaluationMetric(ABC):
+    """Abstract Base Class for all evaluation metrics."""
+    def __init__(self, name: str):
+        self.name = name
+
+    @abstractmethod
+    def calculate(self, generated_text: str, gold_standard: Dict[str, Any]) -> float:
+        """Calculates a score (0.0 to 1.0) based on the output and ground truth."""
+        pass
+
+class FactualAccuracyMetric(EvaluationMetric):
+    """Checks if key facts derived from the gold standard are present in the generated text."""
+    def __init__(self):
+        super().__init__("FactualAccuracy")
+
+    def calculate(self, generated_text: str, gold_standard: Dict[str, Any]) -> float:
+        # Logic: Use NLP extraction (e.g., spaCy or specific LLM call) to identify key facts 
+        # required by `gold_standard['evaluation_criteria']['facts']`.
+        required_facts = gold_standard.get('evaluation_criteria', {}).get('facts', [])
+        
+        if not required_facts: return 1.0 # No check necessary
+
+        found_count = 0
+        for fact in required_facts:
+            # Implementation Note: Use fuzzy matching or semantic search for robustness.
+            if fact.lower() in generated_text.lower():
+                found_count += 1
+        
+        score = found_count / len(required_facts) if required_facts else 0.0
+        return round(min(max(score, 0.0), 1.0), 3)
+
+class StructuralCoverageMetric(EvaluationMetric):
+    """Ensures that the generated response addresses all mandated components of the prompt."""
+    def __init__(self):
+        super().__init__("StructuralCoverage")
+
+    def calculate(self, generated_text: str, gold_standard: Dict[str, Any]) -> float:
+        # Logic: Compare structure (headings, sections) and mandatory elements 
+        # defined in the prompt against the output.
+        required_elements = gold_standard.get('evaluation_criteria', {}).get('required_concepts', [])
+        
+        if not required_elements: return 1.0
+
+        coverage_score = sum(1 for element in required_elements if element.lower() in generated_text.lower()) / len(required_elements)
+        return round(min(max(coverage_score, 0.0), 1.0), 3)
+
+
+class MultiDimensionalEvaluator:
+    """Coordinates the execution of all specialized evaluation metrics."""
+    def __init__(self, config: Dict[str, Any]):
+        self.metrics = {
+            "FactualAccuracy": FactualAccuracyMetric(),
+            "StructuralCoverage": StructuralCoverageMetric(),
+            # ... Initialize other metrics (e.g., SemanticSimilarityMetric)
+        }
+
+    def evaluate_sample(self, generated_output: str, gold_standard: Dict[str, Any]) -> Dict[str, float]:
+        """Runs all configured metrics on a single sample."""
+        results = {}
+        for dim_name, metric in self.metrics.items():
+            score = metric.calculate(generated_output, gold_standard)
+            results[dim_name] = score
+        return results
+
+# Note: ROUGE and Semantic Similarity modules (e.g., using HuggingFace/transformers) 
+# would be integrated here following the same interface pattern.
